@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+matplotlib
+scikit-learn
+nltk
+summa
+pymupdf==1.22.5  # Specify the latest stable version
+pillow
+python-docx
+requests
+beautifulsoup4
+openpyxl
