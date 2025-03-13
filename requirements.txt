@@ -13,3 +13,4 @@ beautifulsoup4
 openpyxl
 rouge
 rouge_score
+textstat
