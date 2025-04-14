@@ -22,6 +22,16 @@ from rouge_score import rouge_scorer
 import textstat
 import matplotlib.pyplot as plt
 import validators
+import pytesseract  # For OCR to extract text from images
+import os  # For path validation
+
+# Configure the path to the Tesseract executable
+pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+
+# Validate the Tesseract path
+if not os.path.exists(pytesseract.pytesseract.tesseract_cmd):
+    st.error(f"Tesseract executable not found at {pytesseract.pytesseract.tesseract_cmd}. Please install Tesseract OCR or update the path in the script.")
+    raise FileNotFoundError(f"Tesseract executable not found at {pytesseract.pytesseract.tesseract_cmd}. Please install Tesseract OCR or update the path.")
 
 # Set up logging for debugging and error tracking
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -303,6 +313,26 @@ def fetch_text_from_url(url):
         st.error(f"Failed to fetch URL: {e}")
         return ""
 
+# Extract text from an image using OCR
+def extract_text_from_image(image):
+    try:
+        text = pytesseract.image_to_string(image)
+        return text.strip()
+    except Exception as e:
+        logger.error(f"Error in extract_text_from_image: {e}")
+        st.error(f"Failed to extract text from image: {e}")
+        return ""
+
+# Process uploaded image (for display and text extraction)
+def process_image(file):
+    try:
+        img = Image.open(file)
+        return [img]  # Return as a list to match other image extraction functions
+    except Exception as e:
+        logger.error(f"Error processing image: {e}")
+        st.error(f"Failed to process image: {e}")
+        return []
+
 # Streamlit GUI with narrower layout
 st.set_page_config(page_title="Scientific Document Analyzer", layout="centered")
 
@@ -317,7 +347,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Unsupervised Topic Modeling & Summarization of Scientific Research Documents")
-st.markdown("Upload a document (PDF, DOCX, TXT), enter a URL, or paste text directly below.")
+st.markdown("Upload a document (PDF, DOCX, TXT, Image), enter a URL, or paste text directly below.")
 
 # Load dataset and train LDA model
 df = load_dataset()
@@ -328,8 +358,8 @@ with st.expander("Model Quality Metrics", expanded=True):
     st.write(f"*LDA Model Perplexity:* {model_perplexity:.2f} (lower is better)")
     st.write(f"*LDA Model Coherence (UCI):* {model_coherence:.2f} (higher is better)")
 
-# Input type selection
-input_type = st.selectbox('Select the document type', ['PDF', 'DOCX', 'Text File', 'URL', 'Direct Text'])
+# Input type selection with Image option
+input_type = st.selectbox('Select the document type', ['PDF', 'DOCX', 'Text File', 'URL', 'Direct Text', 'Image'])
 
 # Process input based on type
 text = ""
@@ -364,54 +394,67 @@ elif input_type == 'Direct Text':
     if text_input:
         with st.spinner("Processing direct text input..."):
             text = text_input
+elif input_type == 'Image':
+    uploaded_file = st.file_uploader("Upload your image file", type=["png", "jpg", "jpeg"])
+    if uploaded_file:
+        with st.spinner("Processing image and extracting text..."):
+            images = process_image(uploaded_file)
+            if images:  # Extract text from the image using OCR
+                text = extract_text_from_image(images[0])
 
 # Process and display results
-if text:
+if text or images:
     with st.spinner("Analyzing content..."):
-        topic = get_topic_from_lda(text, vectorizer, lda)
-        summary = summarize(text, ratio=0.5)
+        if text:  # Only process text if it exists
+            topic = get_topic_from_lda(text, vectorizer, lda)
+            summary = summarize(text, ratio=0.5)
+        else:
+            topic = "No text available for topic modeling"
+            summary = "No text available for summarization"
         processing_time = time.time() - start_time
 
-        with st.expander("Predicted Topic", expanded=True):
-            st.subheader(f"Predicted Topic: {topic}")
+        if text:
+            with st.expander("Predicted Topic", expanded=True):
+                st.subheader(f"Predicted Topic: {topic}")
 
-        with st.expander("Extracted Text"):
-            st.text_area("Extracted Text", text, height=300)
+            with st.expander("Extracted Text"):
+                st.text_area("Extracted Text", text, height=300)
 
-        with st.expander("Summary"):
-            st.markdown(f"<div style='text-align: justify; font-size: 16px;'>{summary}</div>", unsafe_allow_html=True)
+            with st.expander("Summary"):
+                st.markdown(f"<div style='text-align: justify; font-size: 16px;'>{summary}</div>", unsafe_allow_html=True)
 
-        with st.expander("Evaluation Metrics", expanded=True):
-            metrics = evaluate_summary(text, summary)
-            
-            st.subheader("Summary Quality Metrics")
-            st.write("*ROUGE Scores:*")
-            st.write(f"ROUGE-1 (Precision: {metrics['rouge_scores']['rouge1'].precision:.2f}, "
-                     f"Recall: {metrics['rouge_scores']['rouge1'].recall:.2f}, "
-                     f"F1: {metrics['rouge_scores']['rouge1'].fmeasure:.2f})")
-            st.write(f"ROUGE-2 (Precision: {metrics['rouge_scores']['rouge2'].precision:.2f}, "
-                     f"Recall: {metrics['rouge_scores']['rouge2'].recall:.2f}, "
-                     f"F1: {metrics['rouge_scores']['rouge2'].fmeasure:.2f})")
-            st.write(f"ROUGE-L (Precision: {metrics['rouge_scores']['rougeL'].precision:.2f}, "
-                     f"Recall: {metrics['rouge_scores']['rougeL'].recall:.2f}, "
-                     f"F1: {metrics['rouge_scores']['rougeL'].fmeasure:.2f})")
-            st.write(f"*BLEU Score:* {metrics['bleu_score']:.4f} (higher is better)")
-            st.write(f"*Cosine Similarity:* {metrics['cosine_similarity']:.2f} (higher is better)")
-            st.write(f"*Readability (Flesch-Kincaid Grade):* {metrics['readability_score']:.2f} (lower is easier)")
-            st.write(f"*Word Count:* Original: {metrics['word_count']['original']}, Summary: {metrics['word_count']['summary']}")
-            st.write(f"*Reduction Ratio:* {metrics['reduction_ratio']:.2f}%")
-            st.write(f"*Keyword Retention Rate:* {metrics['keyword_retention']:.2f}%")
-            st.write(f"*Processing Time:* {processing_time:.2f} seconds")
+            with st.expander("Evaluation Metrics", expanded=True):
+                metrics = evaluate_summary(text, summary)
+                
+                st.subheader("Summary Quality Metrics")
+                st.write("*ROUGE Scores:*")
+                st.write(f"ROUGE-1 (Precision: {metrics['rouge_scores']['rouge1'].precision:.2f}, "
+                         f"Recall: {metrics['rouge_scores']['rouge1'].recall:.2f}, "
+                         f"F1: {metrics['rouge_scores']['rouge1'].fmeasure:.2f})")
+                st.write(f"ROUGE-2 (Precision: {metrics['rouge_scores']['rouge2'].precision:.2f}, "
+                         f"Recall: {metrics['rouge_scores']['rouge2'].recall:.2f}, "
+                         f"F1: {metrics['rouge_scores']['rouge2'].fmeasure:.2f})")
+                st.write(f"ROUGE-L (Precision: {metrics['rouge_scores']['rougeL'].precision:.2f}, "
+                         f"Recall: {metrics['rouge_scores']['rougeL'].recall:.2f}, "
+                         f"F1: {metrics['rouge_scores']['rougeL'].fmeasure:.2f})")
+                st.write(f"*BLEU Score:* {metrics['bleu_score']:.4f} (higher is better)")
+                st.write(f"*Cosine Similarity:* {metrics['cosine_similarity']:.2f} (higher is better)")
+                st.write(f"*Readability (Flesch-Kincaid Grade):* {metrics['readability_score']:.2f} (lower is easier)")
+                st.write(f"*Word Count:* Original: {metrics['word_count']['original']}, Summary: {metrics['word_count']['summary']}")
+                st.write(f"*Reduction Ratio:* {metrics['reduction_ratio']:.2f}%")
+                st.write(f"*Keyword Retention Rate:* {metrics['keyword_retention']:.2f}%")
+                st.write(f"*Processing Time:* {processing_time:.2f} seconds")
 
-            st.subheader("Metrics Visualization")
-            plot_metrics(metrics)
+                st.subheader("Metrics Visualization")
+                plot_metrics(metrics)
 
         if images:
             with st.expander("Extracted Images"):
                 for img in images:
                     st.image(img, use_container_width=True)
 
-        st.download_button(label="Download Summary", data=summary, file_name="summary.txt", mime="text/plain")
-        st.download_button(label="Download Topic", data=topic, file_name="topic.txt", mime="text/plain")
+        if text:
+            st.download_button(label="Download Summary", data=summary, file_name="summary.txt", mime="text/plain")
+            st.download_button(label="Download Topic", data=topic, file_name="topic.txt", mime="text/plain")
 else:
-    st.info("Please upload a document, enter a URL, or paste text to begin analysis.")
+    st.info("Please upload a document, enter a URL, paste text, or upload an image to begin analysis.")
