@@ -24,9 +24,16 @@ import matplotlib.pyplot as plt
 import validators
 import pytesseract  # For OCR to extract text from images
 import os  # For path validation
+import platform
+import shutil
 
-# Configure the path to the Tesseract executable
-pytesseract.pytesseract.tesseract_cmd = r'tesseract-ocr-w64-setup-5.5.0.20241111.exe'
+# Set tesseract path based on environment
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+else:
+    # Try to find tesseract in Linux environments
+    pytesseract.pytesseract.tesseract_cmd = shutil.which("tesseract")
+
 
 # Validate the Tesseract path
 if not os.path.exists(pytesseract.pytesseract.tesseract_cmd):
