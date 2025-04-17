@@ -15,4 +15,4 @@ rouge
 rouge_score
 textstat
 validators
-tesseract-ocr
+pytesseract
