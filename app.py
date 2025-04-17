@@ -26,7 +26,7 @@ import pytesseract  # For OCR to extract text from images
 import os  # For path validation
 
 # Configure the path to the Tesseract executable
-pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'tesseract-ocr-w64-setup-5.5.0.20241111 (1).exe'
 
 # Validate the Tesseract path
 if not os.path.exists(pytesseract.pytesseract.tesseract_cmd):
