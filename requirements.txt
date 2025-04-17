@@ -16,4 +16,4 @@ rouge_score
 textstat
 validators
 pytesseract  
-tesseract-ocr-w64-setup-5.5.0.20241111 (1).exe
+tesseract-ocr-w64-setup-5.5.0.20241111.exe
